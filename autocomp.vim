@@ -8,6 +8,7 @@
 "
 " Copy this file to the VIM plugin's directory.
 " On Windows, this would be: ...\vimfiles\plugin\.
+" On Linux: ~/.vim/plugin/.
 "
 "   Usage
 "

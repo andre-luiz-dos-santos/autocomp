@@ -195,12 +195,12 @@ function s:WriteAutoCompleteBuffer()
 				if len(l:ml) > 1
 					if l:curPrefix != l:ml[1]
 						let curPrefix = l:ml[1]
-						let l:options += [repeat('-', winwidth(0)), '* ' . l:curPrefix]
+						let l:options += [repeat('-', winwidth(0)), ' [' . l:autocomp.curWord . l:curPrefix . ']']
 					endif
 					let l:options += [i . ' ' . l:ml[2]]
 				else
 					if l:curPrefix != ''
-						let l:options += [repeat('-', winwidth(0))]
+						let l:options += [repeat('-', winwidth(0)), ' [' . l:autocomp.curWord . ']']
 						let l:curPrefix = ''
 					endif
 					let l:options += [i . ' ' . strpart(l:word, len(l:autocomp.curWord))]

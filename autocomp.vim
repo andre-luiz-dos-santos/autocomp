@@ -1,5 +1,5 @@
 " Vim global plugin for auto-completion
-" Last Change: 2010 May 15
+" Last Change: 2010 Oct 22
 " Maintainer:	André Luiz dos Santos <andre.netvision.com.br@gmail.com>
 " License: This file is placed in the public domain.
 "{{{ Documentation
@@ -49,6 +49,10 @@ let s:letters = '_'
 let s:letters .= 'abcdefghijlmnopqrstuvxzywk'
 let s:letters .= 'ABCDEFGHIJLMNOPQRSTUVXZYWK'
 
+let s:programmerMode = 1
+
+highlight AutoCompCommonPrefix term=inverse cterm=inverse gui=inverse
+
 if !hasmapto('<Plug>AutocompStart')
 	map <unique> <F5> <Plug>AutocompStart
 endif
@@ -73,9 +77,10 @@ endfunction
 
 function s:CreateWindow()
 	" Create the AutoComplete buffer.
-	silent vertical rightbelow 25new AutoComplete
+	silent vertical leftabove 25new AutoComplete
 	setlocal buftype=nofile noswapfile nonumber nowrap winfixwidth
 	""nobuflisted
+	call matchadd('AutoCompCommonPrefix', '\v^-\[.*\]-*$')
 	" Go back to the previous window.
 	wincmd p
 endfunction
@@ -121,8 +126,6 @@ function s:UpdateWords(filter)
 	call s:CountWordsInBuffer(l:words, a:filter)
 	" Create a sorted list of the 20 most commonly used words. {{{
 	" items() ->
-	" [ ['word', 3], ['wand', 5], ['bla', 1] ]
-	" filter() ->         (UpdateWordsCount() does the filtering now)
 	" [ ['word', 3], ['wand', 5] ]
 	" 1st sort() ->
 	" [ ['wand', 5], ['word', 3] ]
@@ -133,26 +136,51 @@ function s:UpdateWords(filter)
 	let b:autocomp.words = sort(map(sort(items(l:words), 's:WordSortAlg')[:20-1], 'v:val[0]'))
 endfunction
 
-function s:PrefixSortAlg(a, b)
-	return a:b[1] - a:a[1]
-endfunction
-
 function s:FindCommonPrefixes()
-	" Find the most commonly used prefixes.
-	let l:prefix = {}
-	for w in b:autocomp.words
-		for i in range(3, len(l:w) - len(b:autocomp.curWord))
-			let l:key = strpart(l:w, len(b:autocomp.curWord), l:i)
-			let l:prefix[l:key] = get(l:prefix, l:key, 0) + 1
+	if s:programmerMode == 0
+		" Find the most commonly used prefixes.
+		let l:prefix = {} " dict value = use count.
+		for w in b:autocomp.words
+			for i in range(1, len(l:w) - len(b:autocomp.curWord))
+				let l:key = strpart(l:w, len(b:autocomp.curWord), l:i)
+				let l:prefix[l:key] = get(l:prefix, l:key, 0) + 1
+			endfor
 		endfor
-	endfor
 
-	let l:plist = map(sort(filter(items(l:prefix), 'v:val[1] >= 3'), 's:PrefixSortAlg'), 'v:val[0]')
-	if len(l:plist) == 0
-		" A regular expression that will never match.
-		return '\V\^\$'
-	else
-		return '\V\^' . b:autocomp.curWord . '\(' . join(l:plist, '\|') . '\)\(\.\+\)\$'
+		" Do not even consider prefixes not used this many times.
+		let l:plist = reverse(sort(map(filter(items(l:prefix), 'v:val[1] >= 2'), 'v:val[0]')))
+		if len(l:plist) == 0
+			" A regular expression that will never match.
+			return '\V\^\$'
+		else
+			return '\V\^' . b:autocomp.curWord . '\(' . join(l:plist, '\|') . '\)\(\.\+\)\$'
+		endif
+	elseif s:programmerMode == 1
+		let l:prefixList = []
+		let l:curWordSize = len(b:autocomp.curWord)
+
+		for prefix in [ 'no', 'auto', 'end' ]
+			if strpart(l:prefix, 0, l:curWordSize) == b:autocomp.curWord
+				let l:prefixList += [strpart(l:prefix, len(b:autocomp.curWord))]
+			endif
+		endfor
+
+		for word in b:autocomp.words
+			for [pattern, offset] in [ ['\v._.', 1], ['\v[a-z][A-Z]', 1] ]
+				let l:startAt = 0
+				for dummy in range(4)
+					let l:index = match(l:word, l:pattern, l:startAt)
+					if l:index == -1
+						break
+					endif
+					let l:index += l:offset
+					let l:prefixList += [strpart(l:word, l:curWordSize, l:index - l:curWordSize)]
+					let l:startAt = l:index + 1
+				endfor
+			endfor
+		endfor
+
+		return '\V\^' . b:autocomp.curWord . '\(' . join(l:prefixList, '\|') . '\)\(\.\+\)\$'
 	endif
 endfunction
 
@@ -183,31 +211,51 @@ function s:WriteAutoCompleteBuffer()
 		" gg (go to beginning) "_ (don't save deleted text) dG (delete until the end of the buffer)
 		normal gg"_dG
 		" Show the list of words.
-		let l:options = []
+		let l:lines = []
 		if empty(l:autocomp.words)
-			let l:options += ['---']
+			let l:lines += ['---']
 		else
-			let l:curPrefix = ''
-			let l:options += [' [' . l:autocomp.curWord . ']']
-			for i in range(len(l:autocomp.words))
-				let l:word = l:autocomp.words[i]
+			" Populate wordsByPrefix.
+			let l:rootPrefix = l:autocomp.curWord
+			let l:wordsByPrefix = {} " e => { 'e': [ 'xact', 'at' ], 'end': [ 'if', 'for' ] }
+			for word in l:autocomp.words
 				let l:ml = matchlist(l:word, l:prefix_re)
-				if len(l:ml) > 1
-					if l:curPrefix != l:ml[1]
-						let curPrefix = l:ml[1]
-						let l:options += [repeat('-', winwidth(0)), ' [' . l:autocomp.curWord . l:curPrefix . ']']
-					endif
-					let l:options += [i . ' ' . l:ml[2]]
+				if len(l:ml) > 0
+					let [l:key, l:value] = [l:rootPrefix . l:ml[1], l:ml[2]]
 				else
-					if l:curPrefix != ''
-						let l:options += [repeat('-', winwidth(0)), ' [' . l:autocomp.curWord . ']']
-						let l:curPrefix = ''
-					endif
-					let l:options += [i . ' ' . strpart(l:word, len(l:autocomp.curWord))]
+					let [l:key, l:value] = [l:rootPrefix, strpart(l:word, len(l:rootPrefix))]
 				endif
+				let l:wordsByPrefix[l:key] = get(l:wordsByPrefix, l:key, []) + [l:value]
 			endfor
+			if s:programmerMode == 0
+				" Remove prefixes that have only one word.
+				" Move removed words to the closest existing parent prefix.
+				for prefix in reverse(sort(keys(l:wordsByPrefix)))
+					if l:prefix != l:rootPrefix && len(l:wordsByPrefix[l:prefix]) == 1
+						for j in range(len(l:prefix) - 1, 1, -1)
+							let l:parentPrefix = strpart(l:prefix, 0, l:j)
+							if has_key(l:wordsByPrefix, l:parentPrefix)
+								let l:loneWord = strpart(l:prefix, len(l:parentPrefix)) . remove(l:wordsByPrefix, l:prefix)[0]
+								let l:wordsByPrefix[l:parentPrefix] += [l:loneWord]
+								break
+							endif
+						endfor
+					endif
+				endfor
+			endif
+			" Prepare lines for the auto-complete buffer.
+			" Reorder b:autocomp.words.
+			let l:newWordsList = []
+			for prefix in sort(keys(l:wordsByPrefix))
+				let l:lines += ['-[' . l:prefix . ']' . repeat('-', winwidth(0) - 3 - len(l:prefix))]
+				for word in sort(l:wordsByPrefix[l:prefix])
+					let l:lines += [len(l:newWordsList) . ' ' . l:word]
+					let l:newWordsList += [l:prefix . l:word]
+				endfor
+			endfor
+			let l:autocomp.words = l:newWordsList
 		endif
-		call setline(1, l:options)
+		call setline(1, l:lines)
 		" Restore windows.
 		execute l:prevWindow . 'wincmd w'
 		execute l:curWindow . 'wincmd w'

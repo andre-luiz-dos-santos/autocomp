@@ -19,7 +19,7 @@
 "
 " Type the first letter of the word that you want. If the desired word appears
 " on the auto-complete window, type its number. Otherwise, type the second
-" letter of the word that you want. And so one.
+" letter of the word that you want. And so on.
 " If you want to type the number and not auto-complete, type the number twice.
 "
 " Numbers above 10 are typed with the help of the Alt key. Example:
@@ -35,7 +35,8 @@
 "  setlocal updatetime=100
 "
 " Figure out how to invoke VIM's auto-complete functions manually.
-" Making the code smarter about what options to present would be nice, too.
+" Making the code smarter about what possible auto-completions to present
+" would be nice, too.
 "
 "}}}
 "{{{ Initialization

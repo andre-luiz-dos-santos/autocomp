@@ -46,10 +46,13 @@ if exists('loaded_autocomp')
 endif
 let loaded_autocomp = 1
 
-let s:letters = '_'
-let s:letters .= 'abcdefghijlmnopqrstuvxzywk'
-let s:letters .= 'ABCDEFGHIJLMNOPQRSTUVXZYWK'
+" This variable is used inside pattern brackets.
+" If you want to match a close square bracket ( ] ), it must be the first character.
+" Backslashes must be doubled.
+let s:letters = '_a-zA-Z'
 
+" Only two values are valid for this variable: 0 and 1.
+" Switch between them and see which mode you like best.
 let s:programmerMode = 1
 
 highlight AutoCompCommonPrefix term=inverse cterm=inverse gui=inverse
@@ -90,11 +93,11 @@ endfunction
 "{{{ Word list
 
 function s:CountWordsInLine(words, filter, line)
-	for l:word in split(a:line, '[^' . s:letters . ']\+')
+	for l:word in split(a:line, '\V\[^' . s:letters . ']\+')
 		" Pay attention to the pair of consecutive dots in the following line. It
 		" means that the filter must be followed by at least two characters to
 		" match.
-		if match(l:word, '^' . a:filter . '..') >= 0
+		if match(l:word, '\V\^' . a:filter . '\.\.') >= 0
 			let a:words[l:word] = get(a:words, l:word, 0) + 1
 		endif
 	endfor
@@ -160,7 +163,7 @@ function s:FindCommonPrefixes()
 		let l:prefixList = []
 		let l:curWordSize = len(b:autocomp.curWord)
 
-		for prefix in [ 'no', 'auto', 'end' ]
+		for prefix in [ 'no', 'auto', 'end', 'get', 'set' ]
 			if strpart(l:prefix, 0, l:curWordSize) == b:autocomp.curWord
 				let l:prefixList += [strpart(l:prefix, len(b:autocomp.curWord))]
 			endif
@@ -305,7 +308,7 @@ function s:LetterKeyPressed(key)
 	" Get the current word. (The word under the cursor)
 	let [l:curRow, l:curCol] = getpos('.')[1:2]
 	let l:curLine = getline(l:curRow)
-	let b:autocomp.curWord = matchstr(strpart(l:curLine, 0, l:curCol - 1), '[' . s:letters . ']*$')
+	let b:autocomp.curWord = matchstr(strpart(l:curLine, 0, l:curCol - 1), '\V\[' . s:letters . ']\*\$')
 
 	" Search for words that start with the current word.
 	" If there is no current word, then do nothing.

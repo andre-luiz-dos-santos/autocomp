@@ -117,7 +117,8 @@ function s:CountWordsInBuffer(words, filter)
 		call s:CountWordsInLine(a:words, a:filter, l:curLine - l:index)
 		call s:CountWordsInLine(a:words, a:filter, l:curLine + l:index)
 		if len(a:words) > 20
-			return " Enough words found.
+			" Enough words found.
+			return
 		endif
 	endfor
 endfunction
